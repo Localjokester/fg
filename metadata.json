@@ -1,0 +1,6 @@
+{
+  "name": "Vibesphere",
+  "description": "The ultimate social vibe combining photo feeds, vertical video reels, trending audio, and interactive creative stories.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
