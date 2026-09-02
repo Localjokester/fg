@@ -25,7 +25,9 @@ data class PostEntity(
     val isSaved: Boolean = false,
     val timestamp: Long = System.currentTimeMillis(),
     val location: String = "Tokyo, Shibuya",
-    val filterName: String = "Cyber Neon"
+    val filterName: String = "Cyber Neon",
+    val spotifyPlaylistUrl: String = "",
+    val spotifyPlaylistName: String = ""
 )
 
 @Entity(tableName = "stories")
@@ -37,6 +39,8 @@ data class StoryEntity(
     val userAvatarUrl: String = "",
     val storyMediaDrawable: String = "img_reel_cyber_dance",
     val caption: String = "Living in the moment ✨",
+    val feelingEmoji: String = "✨",
+    val feelingMood: String = "Euphoric",
     val isSeen: Boolean = false,
     val isLive: Boolean = false,
     val timestamp: Long = System.currentTimeMillis()
@@ -70,7 +74,9 @@ data class UserProfileEntity(
     val totalVibesCount: Int = 129000,
     val anthemTitle: String = "Neon Horizon (Extended Mix)",
     val anthemArtist: String = "CyberAura",
-    val badge: String = "Verified Creator"
+    val badge: String = "Verified Creator",
+    val spotifyPlaylistUrl: String = "https://open.spotify.com/playlist/37i9dQZF1DXdLEN7aqioXM",
+    val spotifyPlaylistName: String = "Cyber Chill & Neon Lo-Fi"
 )
 
 @Entity(tableName = "sound_tracks")
@@ -94,5 +100,8 @@ data class DirectMessageEntity(
     val messageText: String,
     val timestamp: Long = System.currentTimeMillis(),
     val isFromMe: Boolean = false,
-    val unread: Boolean = false
+    val unread: Boolean = false,
+    val isDisappearing: Boolean = false,
+    val expireMinutes: Int = 0, // 0: off, 5: 5 min, 60: 1 hr, 1440: 24 hr
+    val reactionEmoji: String = ""
 )

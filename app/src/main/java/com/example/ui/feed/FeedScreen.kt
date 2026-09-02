@@ -67,9 +67,16 @@ import com.example.data.local.entity.SoundTrackEntity
 import com.example.data.local.entity.StoryEntity
 import com.example.ui.components.DoubleTapLikeArea
 import com.example.ui.components.MusicTicker
+import com.example.ui.components.ShimmerFeedSkeleton
+import com.example.ui.components.VibeCircularProgressIndicator
+import com.example.ui.components.VibeMediaImage
 import com.example.ui.components.VibeRingAvatar
 import com.example.ui.components.VibeScoreBadge
+import com.example.ui.components.VibeSyncBanner
 import com.example.ui.components.getDrawableResByName
+import com.example.ui.components.shimmerLoading
+import com.example.ui.spotify.SpotifyBadgePill
+import com.example.ui.spotify.SpotifyPlaylistBottomSheet
 import com.example.ui.theme.BorderGlass
 import com.example.ui.theme.BorderSubtle
 import com.example.ui.theme.FrostedLavender
@@ -98,45 +105,72 @@ fun FeedScreen(
     onOpenShare: (PostEntity) -> Unit,
     onSoundClick: (SoundTrackEntity) -> Unit,
     onDirectComment: (PostEntity, String) -> Unit,
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    LazyColumn(
-        modifier = modifier
-            .fillMaxSize()
-            .testTag("feed_screen_list"),
-        contentPadding = PaddingValues(bottom = 90.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Top Stories Carousel Row
-        item {
-            StoriesCarouselRow(
-                stories = stories,
-                onStoryClick = onStoryClick,
-                onAddStoryClick = onAddStoryClick
-            )
-        }
+    var activeSpotifyPlaylist by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-        // Feed Posts
-        items(posts, key = { it.id }) { post ->
-            FeedPostCard(
-                post = post,
-                onToggleLike = { onToggleLike(post.id, post.isLiked) },
-                onToggleSave = { onToggleSave(post.id, post.isSaved) },
-                onOpenComments = { onOpenComments(post) },
-                onOpenShare = { onOpenShare(post) },
-                onSoundClick = {
-                    onSoundClick(
-                        SoundTrackEntity(
-                            title = post.soundTitle,
-                            artist = post.soundArtist,
-                            coverDrawable = post.mediaDrawableName,
-                            vibesCount = post.likesCount * 3
+    if (posts.isEmpty() && isRefreshing) {
+        // Full Shimmer Skeleton on Initial Load
+        ShimmerFeedSkeleton(modifier = modifier)
+    } else {
+        LazyColumn(
+            modifier = modifier
+                .fillMaxSize()
+                .testTag("feed_screen_list"),
+            contentPadding = PaddingValues(bottom = 90.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // Top Network Data Fetch / Syncing Banner
+            item {
+                VibeSyncBanner(
+                    isSyncing = isRefreshing,
+                    onRefresh = onRefresh
+                )
+            }
+
+            // Top Stories Carousel Row
+            item {
+                StoriesCarouselRow(
+                    stories = stories,
+                    onStoryClick = onStoryClick,
+                    onAddStoryClick = onAddStoryClick
+                )
+            }
+
+            // Feed Posts
+            items(posts, key = { it.id }) { post ->
+                FeedPostCard(
+                    post = post,
+                    onToggleLike = { onToggleLike(post.id, post.isLiked) },
+                    onToggleSave = { onToggleSave(post.id, post.isSaved) },
+                    onOpenComments = { onOpenComments(post) },
+                    onOpenShare = { onOpenShare(post) },
+                    onSoundClick = {
+                        onSoundClick(
+                            SoundTrackEntity(
+                                title = post.soundTitle,
+                                artist = post.soundArtist,
+                                coverDrawable = post.mediaDrawableName,
+                                vibesCount = post.likesCount * 3
+                            )
                         )
-                    )
-                },
-                onSendDirectComment = { text -> onDirectComment(post, text) }
-            )
+                    },
+                    onSendDirectComment = { text -> onDirectComment(post, text) },
+                    onSpotifyClick = { url, name -> activeSpotifyPlaylist = Pair(url, name) }
+                )
+            }
         }
+    }
+
+    // Active Spotify Playlist Bottom Sheet
+    activeSpotifyPlaylist?.let { (url, name) ->
+        SpotifyPlaylistBottomSheet(
+            playlistUrl = url,
+            playlistName = name,
+            onDismiss = { activeSpotifyPlaylist = null }
+        )
     }
 }
 
@@ -221,14 +255,34 @@ fun StoriesCarouselRow(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.clickable { onStoryClick(story) }
             ) {
-                VibeRingAvatar(
-                    drawableName = story.storyMediaDrawable,
-                    size = 64.dp,
-                    hasStory = true,
-                    isSeen = story.isSeen,
-                    isLive = story.isLive,
-                    onClick = { onStoryClick(story) }
-                )
+                Box {
+                    VibeRingAvatar(
+                        drawableName = story.storyMediaDrawable,
+                        size = 64.dp,
+                        hasStory = true,
+                        isSeen = story.isSeen,
+                        isLive = story.isLive,
+                        onClick = { onStoryClick(story) }
+                    )
+
+                    // Feeling Emoji Mini Badge
+                    if (story.feelingEmoji.isNotBlank()) {
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .align(Alignment.BottomEnd)
+                                .clip(CircleShape)
+                                .background(Color(0xFF1E1B4B))
+                                .border(1.dp, FrostedLavender, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = story.feelingEmoji,
+                                fontSize = 12.sp
+                            )
+                        }
+                    }
+                }
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = story.username,
@@ -255,7 +309,8 @@ fun FeedPostCard(
     onOpenComments: () -> Unit,
     onOpenShare: () -> Unit,
     onSoundClick: () -> Unit,
-    onSendDirectComment: (String) -> Unit
+    onSendDirectComment: (String) -> Unit,
+    onSpotifyClick: (String, String) -> Unit = { _, _ -> }
 ) {
     var quickCommentText by remember { mutableStateOf("") }
     var isExpandedCaption by remember { mutableStateOf(false) }
@@ -343,8 +398,8 @@ fun FeedPostCard(
                     .aspectRatio(if (post.postType == "REEL") 4f / 5f else 1f)
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
-                    Image(
-                        painter = painterResource(id = getDrawableResByName(post.mediaDrawableName)),
+                    VibeMediaImage(
+                        drawableName = post.mediaDrawableName,
                         contentDescription = post.caption,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -508,6 +563,14 @@ fun FeedPostCard(
                         color = FrostedLavender,
                         fontSize = 12.sp,
                         fontWeight = FontWeight.Medium
+                    )
+                }
+
+                // Spotify Playlist Badge
+                if (post.spotifyPlaylistName.isNotBlank() || post.spotifyPlaylistUrl.isNotBlank()) {
+                    SpotifyBadgePill(
+                        playlistName = if (post.spotifyPlaylistName.isNotBlank()) post.spotifyPlaylistName else "Spotify Playlist",
+                        onClick = { onSpotifyClick(post.spotifyPlaylistUrl, post.spotifyPlaylistName) }
                     )
                 }
 

@@ -32,6 +32,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayCircleOutline
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Videocam
@@ -76,8 +77,11 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.R
 import com.example.data.local.entity.PostEntity
+import com.example.ui.auth.AuthScreen
+import com.example.ui.components.VibeCircularProgressIndicator
 import com.example.ui.components.VibeRingAvatar
 import com.example.ui.create.CreateVibeScreen
+import com.example.ui.editor.PhotoEditorScreen
 import com.example.ui.explore.ExploreScreen
 import com.example.ui.feed.FeedScreen
 import com.example.ui.messages.MessagesScreen
@@ -119,10 +123,13 @@ fun VibesphereApp(
     var selectedTab by remember { mutableStateOf(VibeNavTab.FEED) }
     var showMessagesScreen by remember { mutableStateOf(false) }
     var showEditProfileSheet by remember { mutableStateOf(false) }
+    var showPhotoEditor by remember { mutableStateOf(false) }
+    var photoEditorMedia by remember { mutableStateOf("img_vibe_sunset") }
 
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    val isLoggedIn by viewModel.isLoggedIn.collectAsState()
     val allPosts by viewModel.allPosts.collectAsState()
     val reels by viewModel.reels.collectAsState()
     val savedPosts by viewModel.savedPosts.collectAsState()
@@ -141,6 +148,9 @@ fun VibesphereApp(
     val activeSoundSheet by viewModel.activeSoundSheet.collectAsState()
     val shareTargetPost by viewModel.shareTargetPost.collectAsState()
 
+    val isFeedRefreshing by viewModel.isFeedRefreshing.collectAsState()
+    val isExploreLoading by viewModel.isExploreLoading.collectAsState()
+
     val unreadCount = directMessages.count { it.unread }
 
     Box(
@@ -155,11 +165,61 @@ fun VibesphereApp(
                 .background(FrostedBackdropGradient)
         )
 
-        if (showMessagesScreen) {
+        if (!isLoggedIn) {
+            // Authentication (Login / Sign Up / Guest)
+            AuthScreen(
+                onLogin = { emailOrHandle, pass, onResult ->
+                    viewModel.login(emailOrHandle, pass, onResult)
+                },
+                onSignUp = { name, handle, email, pass, bio, avatar, onResult ->
+                    viewModel.signUp(name, handle, email, pass, bio, avatar, onResult)
+                },
+                onGuestLogin = {
+                    viewModel.guestLogin()
+                }
+            )
+        } else if (showPhotoEditor) {
+            PhotoEditorScreen(
+                initialMediaDrawable = photoEditorMedia,
+                onDismiss = { showPhotoEditor = false },
+                onSaveAndPublish = { editedDrawable, filterName, caption ->
+                    viewModel.createNewPost(
+                        caption = caption,
+                        hashtags = "#PhotoStudio #Vibesphere #Filtered",
+                        postType = "PHOTO",
+                        mediaDrawable = editedDrawable,
+                        soundTitle = "Aura Frequency",
+                        soundArtist = "Vibesphere Studio",
+                        location = "Creative Studio",
+                        filterName = filterName
+                    )
+                    showPhotoEditor = false
+                    selectedTab = VibeNavTab.FEED
+                    scope.launch {
+                        snackbarHostState.showSnackbar("✨ Photo published with $filterName filter!")
+                    }
+                }
+            )
+        } else if (showMessagesScreen) {
             MessagesScreen(
                 messages = directMessages,
-                onSendMessage = { handle, name, text ->
-                    viewModel.sendDirectMessage(handle, name, text)
+                onSendMessage = { handle, name, text, isDisappearing, expireMinutes ->
+                    viewModel.sendDirectMessage(
+                        recipientHandle = handle,
+                        recipientName = name,
+                        text = text,
+                        isDisappearing = isDisappearing,
+                        expireMinutes = expireMinutes
+                    )
+                },
+                onSetReaction = { messageId, reaction ->
+                    viewModel.setMessageReaction(messageId, reaction)
+                },
+                onDeleteMessage = { messageId ->
+                    viewModel.deleteMessage(messageId)
+                },
+                onClearChat = { handle, name ->
+                    viewModel.clearChat(handle, name)
                 },
                 onBack = { showMessagesScreen = false }
             )
@@ -172,7 +232,13 @@ fun VibesphereApp(
                     if (selectedTab != VibeNavTab.REELS) {
                         VibesphereTopBar(
                             unreadCount = unreadCount,
-                            onCameraClick = { selectedTab = VibeNavTab.CREATE },
+                            isRefreshing = isFeedRefreshing,
+                            onRefreshClick = { viewModel.refreshFeed() },
+                            onCameraClick = {
+                                photoEditorMedia = "img_vibe_sunset"
+                                showPhotoEditor = true
+                            },
+                            onSearchClick = { selectedTab = VibeNavTab.EXPLORE },
                             onMessagesClick = { showMessagesScreen = true }
                         )
                     }
@@ -199,6 +265,8 @@ fun VibesphereApp(
                                 FeedScreen(
                                     posts = allPosts,
                                     stories = stories,
+                                    isRefreshing = isFeedRefreshing,
+                                    onRefresh = { viewModel.refreshFeed() },
                                     onStoryClick = { viewModel.openStory(it) },
                                     onAddStoryClick = { selectedTab = VibeNavTab.CREATE },
                                     onToggleLike = { id, liked -> viewModel.toggleLike(id, liked) },
@@ -225,19 +293,34 @@ fun VibesphereApp(
                             VibeNavTab.CREATE -> {
                                 CreateVibeScreen(
                                     trendingSounds = trendingSounds,
-                                    onPublishPost = { caption, hashtags, postType, mediaDrawable, soundTitle, soundArtist, location, filterName ->
-                                        viewModel.createNewPost(caption, hashtags, postType, mediaDrawable, soundTitle, soundArtist, location, filterName)
+                                    onPublishPost = { caption, hashtags, postType, mediaDrawable, soundTitle, soundArtist, location, filterName, spotifyUrl, spotifyName ->
+                                        viewModel.createNewPost(
+                                            caption = caption,
+                                            hashtags = hashtags,
+                                            postType = postType,
+                                            mediaDrawable = mediaDrawable,
+                                            soundTitle = soundTitle,
+                                            soundArtist = soundArtist,
+                                            location = location,
+                                            filterName = filterName,
+                                            spotifyPlaylistUrl = spotifyUrl,
+                                            spotifyPlaylistName = spotifyName
+                                        )
                                         scope.launch {
                                             snackbarHostState.showSnackbar("✨ Your Vibe was published successfully!")
                                         }
                                         selectedTab = if (postType == "REEL") VibeNavTab.REELS else VibeNavTab.FEED
                                     },
-                                    onPublishStory = { caption, mediaDrawable ->
-                                        viewModel.createNewStory(caption, mediaDrawable)
+                                    onPublishStory = { caption, mediaDrawable, feelingEmoji, feelingMood ->
+                                        viewModel.createNewStory(caption, mediaDrawable, feelingEmoji, feelingMood)
                                         scope.launch {
-                                            snackbarHostState.showSnackbar("✨ Your Story is now live!")
+                                            snackbarHostState.showSnackbar("✨ Your Story ($feelingEmoji $feelingMood) is now live!")
                                         }
                                         selectedTab = VibeNavTab.FEED
+                                    },
+                                    onOpenPhotoEditor = { media ->
+                                        photoEditorMedia = media
+                                        showPhotoEditor = true
                                     }
                                 )
                             }
@@ -247,6 +330,7 @@ fun VibesphereApp(
                                     trendingSounds = trendingSounds,
                                     searchQuery = searchQuery,
                                     selectedTag = selectedTopicTag,
+                                    isLoading = isExploreLoading,
                                     onSearchQueryChange = { viewModel.setSearchQuery(it) },
                                     onTagSelect = { viewModel.selectTopicTag(it) },
                                     onPostClick = { viewModel.openComments(it) },
@@ -260,7 +344,19 @@ fun VibesphereApp(
                                     savedPosts = savedPosts,
                                     likedPosts = likedPosts,
                                     onEditProfileClick = { showEditProfileSheet = true },
-                                    onPostClick = { viewModel.openComments(it) }
+                                    onPostClick = { viewModel.openComments(it) },
+                                    onLogoutClick = {
+                                        viewModel.logout()
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Logged out of account")
+                                        }
+                                    },
+                                    onLinkSpotifyPlaylist = { url, name ->
+                                        viewModel.updateSpotifyPlaylist(url, name)
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("🟢 Linked Spotify Playlist: $name")
+                                        }
+                                    }
                                 )
                             }
                         }
@@ -331,7 +427,10 @@ fun VibesphereApp(
 @Composable
 fun VibesphereTopBar(
     unreadCount: Int,
+    isRefreshing: Boolean = false,
+    onRefreshClick: () -> Unit = {},
     onCameraClick: () -> Unit,
+    onSearchClick: () -> Unit,
     onMessagesClick: () -> Unit
 ) {
     Row(
@@ -381,12 +480,39 @@ fun VibesphereTopBar(
         // Frosted Glass Action Buttons
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Camera / Search shortcut
+            // Live Sync / Refresh Indicator & Button
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(if (isRefreshing) Color(0x338B5CF6) else Color(0x26FFFFFF))
+                    .border(1.dp, if (isRefreshing) FrostedLavender else Color(0x33FFFFFF), CircleShape)
+                    .clickable(enabled = !isRefreshing, onClick = onRefreshClick)
+                    .testTag("top_bar_refresh_button"),
+                contentAlignment = Alignment.Center
+            ) {
+                if (isRefreshing) {
+                    VibeCircularProgressIndicator(
+                        size = 18.dp,
+                        strokeWidth = 2.dp,
+                        color = FrostedLavender
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = "Refresh Feed",
+                        tint = FrostedLavender,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // Camera / Photo Editor Studio shortcut
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
                     .clip(CircleShape)
                     .background(Color(0x26FFFFFF))
                     .border(1.dp, Color(0x33FFFFFF), CircleShape)
@@ -395,17 +521,36 @@ fun VibesphereTopBar(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
+                    imageVector = Icons.Default.CameraAlt,
+                    contentDescription = "Photo Studio & Filters",
+                    tint = FrostedLavender,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            // Search shortcut
+            Box(
+                modifier = Modifier
+                    .size(38.dp)
+                    .clip(CircleShape)
+                    .background(Color(0x26FFFFFF))
+                    .border(1.dp, Color(0x33FFFFFF), CircleShape)
+                    .clickable(onClick = onSearchClick)
+                    .testTag("top_bar_search_button"),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
                     imageVector = Icons.Default.Search,
                     contentDescription = "Search",
                     tint = TextPrimary,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
             // DM / Notification Capsule with Lavender Pip
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(38.dp)
                     .clip(CircleShape)
                     .background(Color(0x26FFFFFF))
                     .border(1.dp, Color(0x33FFFFFF), CircleShape)
@@ -417,14 +562,14 @@ fun VibesphereTopBar(
                     imageVector = Icons.Default.NearMe,
                     contentDescription = "Direct Messages",
                     tint = TextPrimary,
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(18.dp)
                 )
                 if (unreadCount > 0) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
-                            .padding(top = 8.dp, end = 8.dp)
-                            .size(8.dp)
+                            .padding(top = 7.dp, end = 7.dp)
+                            .size(7.dp)
                             .clip(CircleShape)
                             .background(FrostedLavender)
                     )

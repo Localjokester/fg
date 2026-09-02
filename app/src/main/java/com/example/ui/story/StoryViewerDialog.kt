@@ -185,12 +185,34 @@ fun StoryViewerDialog(
                             hasStory = false
                         )
                         Column {
-                            Text(
-                                text = story.username,
-                                color = TextPrimary,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                Text(
+                                    text = story.username,
+                                    color = TextPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                // Feeling Emoji Badge
+                                if (story.feelingEmoji.isNotBlank()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(Color(0x4D8B5CF6))
+                                            .border(1.dp, FrostedLavender, RoundedCornerShape(10.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            text = "${story.feelingEmoji} ${story.feelingMood}",
+                                            color = Color.White,
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
                             Text(
                                 text = "@${story.userHandle} • 2h ago",
                                 color = TextSecondary,

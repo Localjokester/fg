@@ -57,12 +57,28 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     val directMessages: StateFlow<List<DirectMessageEntity>> = repository.directMessages
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // --- Authentication State ---
+    private val _isLoggedIn = MutableStateFlow(true)
+    val isLoggedIn: StateFlow<Boolean> = _isLoggedIn.asStateFlow()
+
+    private val _currentAuthEmail = MutableStateFlow("aria.nova@vibesphere.app")
+    val currentAuthEmail: StateFlow<String> = _currentAuthEmail.asStateFlow()
+
     // --- Search & Explore Filter ---
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
     private val _selectedTopicTag = MutableStateFlow("All")
     val selectedTopicTag: StateFlow<String> = _selectedTopicTag.asStateFlow()
+
+    private val _isExploreLoading = MutableStateFlow(false)
+    val isExploreLoading: StateFlow<Boolean> = _isExploreLoading.asStateFlow()
+
+    private val _isFeedRefreshing = MutableStateFlow(false)
+    val isFeedRefreshing: StateFlow<Boolean> = _isFeedRefreshing.asStateFlow()
+
+    private val _isGeneratingAICaption = MutableStateFlow(false)
+    val isGeneratingAICaption: StateFlow<Boolean> = _isGeneratingAICaption.asStateFlow()
 
     val filteredExplorePosts: StateFlow<List<PostEntity>> = combine(
         allPosts,
@@ -183,7 +199,40 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectTopicTag(tag: String) {
-        _selectedTopicTag.value = tag
+        if (_selectedTopicTag.value != tag) {
+            _selectedTopicTag.value = tag
+            viewModelScope.launch {
+                _isExploreLoading.value = true
+                kotlinx.coroutines.delay(400) // Smooth perceived network load shimmer
+                _isExploreLoading.value = false
+            }
+        }
+    }
+
+    fun refreshFeed(onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            _isFeedRefreshing.value = true
+            kotlinx.coroutines.delay(1100) // Simulated remote API synchronization
+            _isFeedRefreshing.value = false
+            onComplete()
+        }
+    }
+
+    fun generateAICaption(filterName: String, topic: String, onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            _isGeneratingAICaption.value = true
+            kotlinx.coroutines.delay(950) // Simulated neural vibe synthesis
+            val generatedCaptions = listOf(
+                "Chasing high-frequency echoes in the neon metropolis ⚡🔮 #$filterName #CyberVibe #FutureAesthetic",
+                "Pure golden hour bliss radiating through every frame ✨🎧 #VibeAesthetic #Atmosphere #Serenity",
+                "Unlocking dimensional creativity with $filterName vibes 🌌💫 #Vibesphere #CreatorMode #Pulse",
+                "Deep sonic rhythms meet frosted lavender dreams 🔮✨ #InTheZone #CreativeEnergy",
+                "Living in full saturation and infinite wavelength 🌈🚀 #VibeCheck #StudioDrop"
+            )
+            val result = generatedCaptions.random()
+            _isGeneratingAICaption.value = false
+            onResult(result)
+        }
     }
 
     fun createNewPost(
@@ -194,7 +243,9 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         soundTitle: String,
         soundArtist: String,
         location: String,
-        filterName: String
+        filterName: String,
+        spotifyPlaylistUrl: String = "",
+        spotifyPlaylistName: String = ""
     ) {
         viewModelScope.launch {
             val profile = userProfile.value
@@ -210,12 +261,30 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 location = location,
                 filterName = filterName,
                 authorName = authorName,
-                authorHandle = authorHandle
+                authorHandle = authorHandle,
+                spotifyPlaylistUrl = spotifyPlaylistUrl,
+                spotifyPlaylistName = spotifyPlaylistName
             )
         }
     }
 
-    fun createNewStory(caption: String, mediaDrawable: String) {
+    fun updateSpotifyPlaylist(url: String, name: String) {
+        viewModelScope.launch {
+            val current = userProfile.value ?: UserProfileEntity()
+            val updated = current.copy(
+                spotifyPlaylistUrl = url,
+                spotifyPlaylistName = name
+            )
+            repository.updateProfile(updated)
+        }
+    }
+
+    fun createNewStory(
+        caption: String,
+        mediaDrawable: String,
+        feelingEmoji: String = "✨",
+        feelingMood: String = "Euphoric"
+    ) {
         viewModelScope.launch {
             val profile = userProfile.value
             val authorName = profile?.name ?: "Aria Nova"
@@ -224,7 +293,9 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
                 caption = caption,
                 mediaDrawable = mediaDrawable,
                 username = authorName,
-                userHandle = authorHandle
+                userHandle = authorHandle,
+                feelingEmoji = feelingEmoji,
+                feelingMood = feelingMood
             )
         }
     }
@@ -242,9 +313,124 @@ class VibeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun sendDirectMessage(recipientHandle: String, recipientName: String, text: String) {
+    // --- Authentication Actions ---
+    fun login(emailOrHandle: String, pass: String, onResult: (Boolean, String) -> Unit) {
+        if (emailOrHandle.isBlank() || pass.isBlank()) {
+            onResult(false, "Please enter all fields")
+            return
+        }
         viewModelScope.launch {
-            repository.sendMessage(recipientHandle, recipientName, text)
+            _currentAuthEmail.value = emailOrHandle
+            _isLoggedIn.value = true
+            onResult(true, "Welcome back to Vibesphere!")
+        }
+    }
+
+    fun signUp(
+        name: String,
+        handle: String,
+        email: String,
+        pass: String,
+        bio: String,
+        avatarDrawable: String,
+        onResult: (Boolean, String) -> Unit
+    ) {
+        if (name.isBlank() || handle.isBlank() || email.isBlank() || pass.isBlank()) {
+            onResult(false, "Please fill in required fields")
+            return
+        }
+        val cleanHandle = if (handle.startsWith("@")) handle.drop(1) else handle
+        viewModelScope.launch {
+            val newProfile = UserProfileEntity(
+                userId = "current_user",
+                name = name.trim(),
+                handle = cleanHandle.trim(),
+                bio = if (bio.isNotBlank()) bio.trim() else "Exploring neon beats & visual arts on Vibesphere ✨",
+                avatarDrawable = avatarDrawable,
+                followersCount = 120,
+                followingCount = 45,
+                totalVibesCount = 350,
+                anthemTitle = "Cyber Debut (Live Edit)",
+                anthemArtist = name.trim(),
+                badge = "New Creator"
+            )
+            repository.updateProfile(newProfile)
+            _currentAuthEmail.value = email.trim()
+            _isLoggedIn.value = true
+            onResult(true, "Welcome to Vibesphere, ${name.trim()}! 🎉")
+        }
+    }
+
+    fun logout() {
+        _isLoggedIn.value = false
+    }
+
+    fun guestLogin() {
+        _isLoggedIn.value = true
+    }
+
+    // --- Messaging & Disappearing Messages ---
+    fun sendDirectMessage(
+        recipientHandle: String,
+        recipientName: String,
+        text: String,
+        isDisappearing: Boolean = false,
+        expireMinutes: Int = 0
+    ) {
+        if (text.isBlank()) return
+        viewModelScope.launch {
+            repository.sendMessage(
+                recipientHandle = recipientHandle,
+                recipientName = recipientName,
+                text = text,
+                isFromMe = true,
+                isDisappearing = isDisappearing,
+                expireMinutes = expireMinutes
+            )
+
+            // Auto friend simulation reply after short delay
+            kotlinx.coroutines.delay(1200)
+            val replies = listOf(
+                "That's so fire! 🔥✨",
+                "Totally vibe with that 🎧⚡",
+                "Sending you pure positive frequencies 🔮",
+                "Let's collab on this next drop! 🚀",
+                "Haha love that so much 😄",
+                "Obsessed with your latest reel aesthetic 🌸"
+            )
+            val replyText = replies.random()
+            repository.sendMessage(
+                recipientHandle = recipientHandle,
+                recipientName = recipientName,
+                text = replyText,
+                isFromMe = false,
+                isDisappearing = isDisappearing,
+                expireMinutes = expireMinutes
+            )
+        }
+    }
+
+    fun setMessageReaction(messageId: Long, reaction: String) {
+        viewModelScope.launch {
+            repository.setMessageReaction(messageId, reaction)
+        }
+    }
+
+    fun deleteMessage(messageId: Long) {
+        viewModelScope.launch {
+            repository.deleteMessage(messageId)
+        }
+    }
+
+    fun clearChat(handle: String, name: String) {
+        viewModelScope.launch {
+            repository.clearConversation(handle, name)
+        }
+    }
+
+    fun purgeExpiredMessages() {
+        viewModelScope.launch {
+            repository.purgeExpiredDisappearingMessages()
         }
     }
 }

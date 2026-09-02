@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
         SoundTrackEntity::class,
         DirectMessageEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class VibeDatabase : RoomDatabase() {
@@ -43,6 +43,7 @@ abstract class VibeDatabase : RoomDatabase() {
                     VibeDatabase::class.java,
                     "vibesphere_database"
                 )
+                .fallbackToDestructiveMigration()
                 .addCallback(DatabaseCallback(scope))
                 .build()
                 INSTANCE = instance
@@ -90,6 +91,8 @@ abstract class VibeDatabase : RoomDatabase() {
                     userHandle = "arianova.vibe",
                     storyMediaDrawable = "img_vibe_sunset",
                     caption = "Golden hour vibes in the city skyline 🌆",
+                    feelingEmoji = "✨",
+                    feelingMood = "Euphoric",
                     isSeen = false,
                     isLive = false
                 ),
@@ -99,6 +102,8 @@ abstract class VibeDatabase : RoomDatabase() {
                     userHandle = "kira.volt",
                     storyMediaDrawable = "img_reel_cyber_dance",
                     caption = "Tokyo midnight street choreo dropping soon! ⚡💃",
+                    feelingEmoji = "⚡",
+                    feelingMood = "Chaotic",
                     isSeen = false,
                     isLive = true
                 ),
@@ -108,6 +113,8 @@ abstract class VibeDatabase : RoomDatabase() {
                     userHandle = "leo_aesthetic",
                     storyMediaDrawable = "img_reel_cafe_aesthetic",
                     caption = "Matcha mornings & good tunes 🍵📖",
+                    feelingEmoji = "☕",
+                    feelingMood = "Caffeinated",
                     isSeen = false,
                     isLive = false
                 ),
@@ -117,6 +124,8 @@ abstract class VibeDatabase : RoomDatabase() {
                     userHandle = "maya.beats",
                     storyMediaDrawable = "img_vibe_concert",
                     caption = "Bass was shaking the whole venue! 🔮🎶",
+                    feelingEmoji = "🎧",
+                    feelingMood = "In The Zone",
                     isSeen = false,
                     isLive = false
                 ),
@@ -126,6 +135,8 @@ abstract class VibeDatabase : RoomDatabase() {
                     userHandle = "pixel.drift",
                     storyMediaDrawable = "img_vibe_sunset",
                     caption = "Retro synthwave wave riding 🚀",
+                    feelingEmoji = "🚀",
+                    feelingMood = "Hyped",
                     isSeen = true,
                     isLive = false
                 )

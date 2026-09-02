@@ -68,7 +68,9 @@ class VibeRepository(private val dao: VibeDao) {
         location: String,
         filterName: String,
         authorName: String,
-        authorHandle: String
+        authorHandle: String,
+        spotifyPlaylistUrl: String = "",
+        spotifyPlaylistName: String = ""
     ): Long {
         val post = PostEntity(
             authorName = authorName,
@@ -79,6 +81,8 @@ class VibeRepository(private val dao: VibeDao) {
             hashtags = hashtags,
             soundTitle = soundTitle,
             soundArtist = soundArtist,
+            spotifyPlaylistUrl = spotifyPlaylistUrl,
+            spotifyPlaylistName = spotifyPlaylistName,
             likesCount = 1,
             commentsCount = 0,
             sharesCount = 0,
@@ -96,13 +100,17 @@ class VibeRepository(private val dao: VibeDao) {
         caption: String,
         mediaDrawable: String,
         username: String,
-        userHandle: String
+        userHandle: String,
+        feelingEmoji: String = "✨",
+        feelingMood: String = "Euphoric"
     ): Long {
         val story = StoryEntity(
             username = username,
             userHandle = userHandle,
             storyMediaDrawable = mediaDrawable,
             caption = caption,
+            feelingEmoji = feelingEmoji,
+            feelingMood = feelingMood,
             isSeen = false,
             isLive = false,
             timestamp = System.currentTimeMillis()
@@ -114,15 +122,40 @@ class VibeRepository(private val dao: VibeDao) {
         dao.insertOrUpdateProfile(profile)
     }
 
-    suspend fun sendMessage(recipientHandle: String, recipientName: String, text: String) {
+    suspend fun sendMessage(
+        recipientHandle: String,
+        recipientName: String,
+        text: String,
+        isFromMe: Boolean = true,
+        isDisappearing: Boolean = false,
+        expireMinutes: Int = 0
+    ) {
         val msg = DirectMessageEntity(
             senderHandle = recipientHandle,
             senderName = recipientName,
             messageText = text,
-            isFromMe = true,
-            unread = false,
+            isFromMe = isFromMe,
+            unread = !isFromMe,
+            isDisappearing = isDisappearing,
+            expireMinutes = expireMinutes,
             timestamp = System.currentTimeMillis()
         )
         dao.insertMessage(msg)
+    }
+
+    suspend fun setMessageReaction(messageId: Long, reaction: String) {
+        dao.setMessageReaction(messageId, reaction)
+    }
+
+    suspend fun deleteMessage(messageId: Long) {
+        dao.deleteMessage(messageId)
+    }
+
+    suspend fun purgeExpiredDisappearingMessages() {
+        dao.deleteExpiredMessages(System.currentTimeMillis())
+    }
+
+    suspend fun clearConversation(handle: String, name: String) {
+        dao.clearConversation(handle, name)
     }
 }

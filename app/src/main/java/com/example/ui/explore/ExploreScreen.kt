@@ -58,6 +58,9 @@ import androidx.compose.ui.unit.sp
 import com.example.data.local.entity.PostEntity
 import com.example.data.local.entity.SoundTrackEntity
 import com.example.ui.components.EqualizerWave
+import com.example.ui.components.ShimmerExploreSkeleton
+import com.example.ui.components.VibeCircularProgressIndicator
+import com.example.ui.components.VibeMediaImage
 import com.example.ui.components.VibeScoreBadge
 import com.example.ui.components.getDrawableResByName
 import com.example.ui.theme.BorderGlass
@@ -85,6 +88,7 @@ fun ExploreScreen(
     onTagSelect: (String) -> Unit,
     onPostClick: (PostEntity) -> Unit,
     onSoundClick: (SoundTrackEntity) -> Unit,
+    isLoading: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val topicTags = listOf("All", "#Cyberpunk", "#DanceReels", "#SunsetPhotography", "#EDMFestival", "#CozyCore", "#TokyoNights", "#Aesthetic")
@@ -232,11 +236,12 @@ fun ExploreScreen(
                                         .size(44.dp)
                                         .clip(RoundedCornerShape(10.dp))
                                 ) {
-                                    Image(
-                                        painter = painterResource(id = getDrawableResByName(sound.coverDrawable)),
+                                    VibeMediaImage(
+                                        drawableName = sound.coverDrawable,
                                         contentDescription = sound.title,
                                         contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
+                                        modifier = Modifier.fillMaxSize(),
+                                        showProgressSpinner = false
                                     )
                                     Box(
                                         modifier = Modifier
@@ -277,76 +282,83 @@ fun ExploreScreen(
             }
         }
 
-        // Frosted Grid of Posts & Reels
-        items(posts, key = { it.id }) { post ->
-            val isReel = post.postType == "REEL"
-            Box(
-                modifier = Modifier
-                    .aspectRatio(1f)
-                    .clip(RoundedCornerShape(14.dp))
-                    .border(0.5.dp, Color(0x26FFFFFF), RoundedCornerShape(14.dp))
-                    .clickable { onPostClick(post) }
-                    .testTag("explore_item_${post.id}")
-            ) {
-                Image(
-                    painter = painterResource(id = getDrawableResByName(post.mediaDrawableName)),
-                    contentDescription = post.caption,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                // Bottom Gradient info
+        if (isLoading) {
+            // Shimmer Explore Grid Skeleton during filtering / network fetching
+            item(span = { GridItemSpan(3) }) {
+                ShimmerExploreSkeleton(modifier = Modifier.fillMaxWidth())
+            }
+        } else {
+            // Frosted Grid of Posts & Reels
+            items(posts, key = { it.id }) { post ->
+                val isReel = post.postType == "REEL"
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(Color.Transparent, Color(0x99000000))
-                            )
-                        )
-                )
+                        .aspectRatio(1f)
+                        .clip(RoundedCornerShape(14.dp))
+                        .border(0.5.dp, Color(0x26FFFFFF), RoundedCornerShape(14.dp))
+                        .clickable { onPostClick(post) }
+                        .testTag("explore_item_${post.id}")
+                ) {
+                    VibeMediaImage(
+                        drawableName = post.mediaDrawableName,
+                        contentDescription = post.caption,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
 
-                // Reel indicator badge
-                if (isReel) {
+                    // Bottom Gradient info
                     Box(
                         modifier = Modifier
-                            .padding(6.dp)
-                            .align(Alignment.TopEnd)
-                            .size(22.dp)
-                            .clip(CircleShape)
-                            .background(Color(0x80000000))
-                            .border(0.5.dp, Color(0x40FFFFFF), CircleShape),
-                        contentAlignment = Alignment.Center
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    listOf(Color.Transparent, Color(0x99000000))
+                                )
+                            )
+                    )
+
+                    // Reel indicator badge
+                    if (isReel) {
+                        Box(
+                            modifier = Modifier
+                                .padding(6.dp)
+                                .align(Alignment.TopEnd)
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .background(Color(0x80000000))
+                                .border(0.5.dp, Color(0x40FFFFFF), CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.PlayArrow,
+                                contentDescription = "Reel",
+                                tint = Color.White,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
+
+                    // Likes count on bottom
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.PlayArrow,
-                            contentDescription = "Reel",
-                            tint = Color.White,
-                            modifier = Modifier.size(13.dp)
+                            imageVector = Icons.Default.Favorite,
+                            contentDescription = "Likes",
+                            tint = HeartRed,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = if (post.likesCount > 1000) "${post.likesCount / 1000}k" else "${post.likesCount}",
+                            color = Color.White,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold
                         )
                     }
-                }
-
-                // Likes count on bottom
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(3.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Favorite,
-                        contentDescription = "Likes",
-                        tint = HeartRed,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Text(
-                        text = if (post.likesCount > 1000) "${post.likesCount / 1000}k" else "${post.likesCount}",
-                        color = Color.White,
-                        fontSize = 10.sp,
-                        fontWeight = FontWeight.Bold
-                    )
                 }
             }
         }

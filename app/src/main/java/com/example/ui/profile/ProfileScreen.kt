@@ -48,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -66,6 +67,10 @@ import com.example.data.local.entity.UserProfileEntity
 import com.example.ui.components.EqualizerWave
 import com.example.ui.components.VibeRingAvatar
 import com.example.ui.components.getDrawableResByName
+import com.example.ui.spotify.SpotifyBadgePill
+import com.example.ui.spotify.SpotifyGreen
+import com.example.ui.spotify.SpotifyPlaylistBottomSheet
+import com.example.ui.spotify.SpotifyPlaylistLinkerDialog
 import com.example.ui.theme.BorderGlass
 import com.example.ui.theme.BorderSubtle
 import com.example.ui.theme.FrostedLavender
@@ -92,10 +97,14 @@ fun ProfileScreen(
     likedPosts: List<PostEntity>,
     onEditProfileClick: () -> Unit,
     onPostClick: (PostEntity) -> Unit,
+    onLogoutClick: () -> Unit = {},
+    onLinkSpotifyPlaylist: (url: String, name: String) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val user = profile ?: UserProfileEntity()
     var selectedTab by remember { mutableIntStateOf(0) } // 0: Posts, 1: Reels, 2: Saved, 3: Liked
+    var showSpotifyLinker by remember { mutableStateOf(false) }
+    var showSpotifyBottomSheet by remember { mutableStateOf(false) }
 
     val myPosts = allPosts.filter { it.authorHandle == user.handle || it.postType == "PHOTO" }
     val myReels = allPosts.filter { it.postType == "REEL" }
@@ -229,6 +238,65 @@ fun ProfileScreen(
                         EqualizerWave(color = FrostedLavender, modifier = Modifier.height(14.dp))
                     }
 
+                    // Linked Spotify Playlist Card (Frosted)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(
+                                if (user.spotifyPlaylistUrl.isNotBlank()) Color(0x261DB954) else Color(0x1AFFFFFF)
+                            )
+                            .border(
+                                1.dp,
+                                if (user.spotifyPlaylistUrl.isNotBlank()) SpotifyGreen.copy(alpha = 0.5f) else Color(0x26FFFFFF),
+                                RoundedCornerShape(14.dp)
+                            )
+                            .clickable {
+                                if (user.spotifyPlaylistUrl.isNotBlank()) {
+                                    showSpotifyBottomSheet = true
+                                } else {
+                                    showSpotifyLinker = true
+                                }
+                            }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(text = "🟢", fontSize = 14.sp)
+                            Column {
+                                Text(
+                                    text = if (user.spotifyPlaylistUrl.isNotBlank()) "Linked Spotify Playlist" else "Spotify Playlist",
+                                    color = if (user.spotifyPlaylistUrl.isNotBlank()) SpotifyGreen else TextMuted,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = if (user.spotifyPlaylistName.isNotBlank()) user.spotifyPlaylistName else "Tap to link a Spotify playlist...",
+                                    color = TextPrimary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = if (user.spotifyPlaylistUrl.isNotBlank()) "Preview" else "+ Link",
+                            color = if (user.spotifyPlaylistUrl.isNotBlank()) SpotifyGreen else FrostedLavender,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color(0x33000000))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+
                     // Action Buttons (Frosted)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -246,21 +314,20 @@ fun ProfileScreen(
                         ) {
                             Icon(imageVector = Icons.Default.Edit, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Edit Profile", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text("Edit", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
                         }
 
                         Button(
-                            onClick = {},
+                            onClick = onLogoutClick,
                             modifier = Modifier
                                 .weight(1f)
                                 .height(40.dp)
-                                .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(14.dp)),
+                                .border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(14.dp))
+                                .testTag("switch_account_button"),
                             shape = RoundedCornerShape(14.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = Color(0x1AFFFFFF))
                         ) {
-                            Icon(imageVector = Icons.Default.Share, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text("Share Profile", color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            Text("🔑 Switch / Log Out", color = FrostedLavender, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
 
@@ -399,6 +466,25 @@ fun ProfileScreen(
                 }
             }
         }
+    }
+
+    if (showSpotifyLinker) {
+        SpotifyPlaylistLinkerDialog(
+            initialUrl = user.spotifyPlaylistUrl,
+            onDismiss = { showSpotifyLinker = false },
+            onPlaylistLinked = { url, name ->
+                onLinkSpotifyPlaylist(url, name)
+                showSpotifyLinker = false
+            }
+        )
+    }
+
+    if (showSpotifyBottomSheet && user.spotifyPlaylistUrl.isNotBlank()) {
+        SpotifyPlaylistBottomSheet(
+            playlistUrl = user.spotifyPlaylistUrl,
+            playlistName = user.spotifyPlaylistName,
+            onDismiss = { showSpotifyBottomSheet = false }
+        )
     }
 }
 

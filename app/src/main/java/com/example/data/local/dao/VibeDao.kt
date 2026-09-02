@@ -99,4 +99,16 @@ interface VibeDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertMessage(message: DirectMessageEntity): Long
+
+    @Query("UPDATE direct_messages SET reactionEmoji = :reaction WHERE id = :messageId")
+    suspend fun setMessageReaction(messageId: Long, reaction: String)
+
+    @Query("DELETE FROM direct_messages WHERE id = :messageId")
+    suspend fun deleteMessage(messageId: Long)
+
+    @Query("DELETE FROM direct_messages WHERE isDisappearing = 1 AND (:currentTime - timestamp) > (expireMinutes * 60 * 1000)")
+    suspend fun deleteExpiredMessages(currentTime: Long)
+
+    @Query("DELETE FROM direct_messages WHERE senderHandle = :handle OR senderName = :name")
+    suspend fun clearConversation(handle: String, name: String)
 }

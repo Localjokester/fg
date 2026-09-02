@@ -24,8 +24,10 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -33,17 +35,26 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Verified
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -53,12 +64,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
@@ -145,15 +158,31 @@ fun VibeRingAvatar(
                 .background(VibeBackground),
             contentAlignment = Alignment.Center
         ) {
-            Image(
-                painter = painterResource(id = getDrawableResByName(drawableName)),
-                contentDescription = "User Avatar",
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(2.dp)
-                    .clip(CircleShape)
-            )
+            val isUri = drawableName.startsWith("content://") || drawableName.startsWith("file://") || drawableName.startsWith("http://") || drawableName.startsWith("https://")
+            if (isUri) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(drawableName)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = "User Avatar",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(2.dp)
+                        .clip(CircleShape)
+                )
+            } else {
+                Image(
+                    painter = painterResource(id = getDrawableResByName(drawableName)),
+                    contentDescription = "User Avatar",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(2.dp)
+                        .clip(CircleShape)
+                )
+            }
         }
 
         // LIVE Pill Badge
@@ -400,5 +429,410 @@ fun VibeScoreBadge(score: Int, modifier: Modifier = Modifier) {
             fontWeight = FontWeight.Bold,
             letterSpacing = 0.5.sp
         )
+    }
+}
+
+/**
+ * Animated Shimmer Gradient Brush for loading placeholders and perceived performance enhancement.
+ */
+@Composable
+fun shimmerBrush(
+    showShimmer: Boolean = true,
+    targetValue: Float = 1400f
+): Brush {
+    return if (showShimmer) {
+        val shimmerColors = listOf(
+            Color(0x14FFFFFF),
+            Color(0x338B5CF6),
+            Color(0x66FFFFFF),
+            Color(0x338B5CF6),
+            Color(0x14FFFFFF)
+        )
+        val transition = rememberInfiniteTransition(label = "shimmer_transition")
+        val translateAnimation = transition.animateFloat(
+            initialValue = 0f,
+            targetValue = targetValue,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 1100, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "shimmer_translation"
+        )
+        Brush.linearGradient(
+            colors = shimmerColors,
+            start = Offset(translateAnimation.value - 450f, translateAnimation.value - 450f),
+            end = Offset(translateAnimation.value, translateAnimation.value)
+        )
+    } else {
+        Brush.linearGradient(
+            colors = listOf(Color.Transparent, Color.Transparent)
+        )
+    }
+}
+
+/**
+ * Shimmer effect modifier to apply to any composable placeholder shape.
+ */
+fun Modifier.shimmerLoading(
+    enabled: Boolean = true,
+    shape: Shape = RoundedCornerShape(8.dp)
+): Modifier = composed {
+    if (enabled) {
+        val brush = shimmerBrush(showShimmer = true)
+        this
+            .clip(shape)
+            .background(Color(0x1F1E1B4B))
+            .background(brush)
+            .border(1.dp, Color(0x22FFFFFF), shape)
+    } else {
+        this
+    }
+}
+
+/**
+ * Polished Circular Progress Indicator with glowing neon lavender / cyan styling.
+ */
+@Composable
+fun VibeCircularProgressIndicator(
+    modifier: Modifier = Modifier,
+    size: Dp = 32.dp,
+    strokeWidth: Dp = 3.dp,
+    color: Color = FrostedLavender,
+    trackColor: Color = Color(0x338B5CF6)
+) {
+    Box(
+        modifier = modifier.size(size),
+        contentAlignment = Alignment.Center
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.fillMaxSize(),
+            color = color,
+            trackColor = trackColor,
+            strokeWidth = strokeWidth
+        )
+    }
+}
+
+/**
+ * Smart Media Image Loader with animated Shimmer Placeholder and Circular Progress Indicator.
+ * Improves perceived loading performance during feed scrolling and image rendering.
+ */
+@Composable
+fun VibeMediaImage(
+    drawableName: String,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop,
+    shape: Shape = RoundedCornerShape(0.dp),
+    showProgressSpinner: Boolean = true,
+    simulatedDelayMs: Long = 180L
+) {
+    var isLoaded by remember(drawableName) { mutableStateOf(false) }
+
+    LaunchedEffect(drawableName) {
+        isLoaded = false
+        if (simulatedDelayMs > 0) {
+            delay(simulatedDelayMs)
+        }
+        isLoaded = true
+    }
+
+    Box(
+        modifier = modifier
+            .clip(shape)
+            .testTag("vibe_media_image_container"),
+        contentAlignment = Alignment.Center
+    ) {
+        if (!isLoaded) {
+            // Animated Shimmer Placeholder Box
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .shimmerLoading(enabled = true, shape = shape),
+                contentAlignment = Alignment.Center
+            ) {
+                if (showProgressSpinner) {
+                    VibeCircularProgressIndicator(
+                        size = 28.dp,
+                        strokeWidth = 2.5.dp,
+                        color = FrostedLavender
+                    )
+                }
+            }
+        }
+
+        // Image with smooth fade-in
+        AnimatedVisibility(
+            visible = isLoaded,
+            enter = fadeIn(tween(250)),
+            exit = fadeOut(tween(150))
+        ) {
+            val isUri = drawableName.startsWith("content://") || drawableName.startsWith("file://") || drawableName.startsWith("http://") || drawableName.startsWith("https://")
+            if (isUri) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(drawableName)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = contentDescription,
+                    contentScale = contentScale,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(shape)
+                )
+            } else {
+                Image(
+                    painter = painterResource(id = getDrawableResByName(drawableName)),
+                    contentDescription = contentDescription,
+                    contentScale = contentScale,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clip(shape)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Shimmer Story Avatar Item Placeholder
+ */
+@Composable
+fun ShimmerStoryItemSkeleton(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier.width(72.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .shimmerLoading(enabled = true, shape = CircleShape)
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Box(
+            modifier = Modifier
+                .width(48.dp)
+                .height(10.dp)
+                .shimmerLoading(enabled = true, shape = RoundedCornerShape(4.dp))
+        )
+    }
+}
+
+/**
+ * Shimmer Post Card Skeleton for Feed initial fetch & refresh states
+ */
+@Composable
+fun ShimmerPostSkeleton(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0x1F1E1B4B))
+            .border(1.dp, BorderSubtle, RoundedCornerShape(20.dp))
+            .padding(14.dp)
+            .testTag("shimmer_post_skeleton")
+    ) {
+        Column {
+            // Header Row Skeleton
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(42.dp)
+                        .shimmerLoading(enabled = true, shape = CircleShape)
+                )
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Box(
+                        modifier = Modifier
+                            .width(110.dp)
+                            .height(12.dp)
+                            .shimmerLoading(enabled = true, shape = RoundedCornerShape(4.dp))
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(70.dp)
+                            .height(10.dp)
+                            .shimmerLoading(enabled = true, shape = RoundedCornerShape(4.dp))
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .shimmerLoading(enabled = true, shape = CircleShape)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Main Media Shimmer Box
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1.2f)
+                    .shimmerLoading(enabled = true, shape = RoundedCornerShape(16.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                VibeCircularProgressIndicator(
+                    size = 36.dp,
+                    color = FrostedLavender
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Action Icons Row Skeleton
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(modifier = Modifier.size(26.dp).shimmerLoading(enabled = true, shape = CircleShape))
+                Box(modifier = Modifier.size(26.dp).shimmerLoading(enabled = true, shape = CircleShape))
+                Box(modifier = Modifier.size(26.dp).shimmerLoading(enabled = true, shape = CircleShape))
+                Spacer(modifier = Modifier.weight(1f))
+                Box(modifier = Modifier.size(26.dp).shimmerLoading(enabled = true, shape = CircleShape))
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Caption Skeleton Lines
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.85f)
+                    .height(12.dp)
+                    .shimmerLoading(enabled = true, shape = RoundedCornerShape(4.dp))
+            )
+            Spacer(modifier = Modifier.height(6.dp))
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(0.55f)
+                    .height(10.dp)
+                    .shimmerLoading(enabled = true, shape = RoundedCornerShape(4.dp))
+            )
+        }
+    }
+}
+
+/**
+ * Full Feed Skeleton when fetching or refreshing data
+ */
+@Composable
+fun ShimmerFeedSkeleton(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(top = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Shimmer Stories Row
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(5) {
+                ShimmerStoryItemSkeleton()
+            }
+        }
+
+        // Shimmer Post Cards
+        Column(
+            modifier = Modifier.padding(horizontal = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            repeat(3) {
+                ShimmerPostSkeleton()
+            }
+        }
+    }
+}
+
+/**
+ * Shimmer Explore Grid Skeleton when searching or filtering topics
+ */
+@Composable
+fun ShimmerExploreSkeleton(modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        repeat(4) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .aspectRatio(1f)
+                        .shimmerLoading(enabled = true, shape = RoundedCornerShape(12.dp))
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .aspectRatio(1f)
+                        .shimmerLoading(enabled = true, shape = RoundedCornerShape(12.dp))
+                )
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .aspectRatio(1f)
+                        .shimmerLoading(enabled = true, shape = RoundedCornerShape(12.dp))
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Sync / Data Fetch Banner with rotating indicator and frosted shimmer backdrop
+ */
+@Composable
+fun VibeSyncBanner(
+    isSyncing: Boolean,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = isSyncing,
+        enter = fadeIn(tween(200)),
+        exit = fadeOut(tween(200))
+    ) {
+        Row(
+            modifier = modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp)
+                .clip(RoundedCornerShape(16.dp))
+                .background(
+                    Brush.horizontalGradient(
+                        listOf(
+                            Color(0x558B5CF6),
+                            Color(0x33EC4899),
+                            Color(0x5506B6D4)
+                        )
+                    )
+                )
+                .border(1.dp, FrostedLavender, RoundedCornerShape(16.dp))
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            VibeCircularProgressIndicator(
+                size = 18.dp,
+                strokeWidth = 2.dp,
+                color = Color.White
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = "Fetching newest vibes from network...",
+                color = Color.White,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
     }
 }
